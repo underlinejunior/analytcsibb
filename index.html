@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Dashboard executivo de métricas do YouTube para acompanhamento dos cultos.">
+  <title>Dashboard YouTube | Igreja</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">▶</div>
+        <div>
+          <strong>IBB Analytics</strong>
+          <span>Painel YouTube</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <a href="#visao-geral" class="nav-link active">
+          <span class="nav-icon">▦</span>
+          <span>Visão geral</span>
+        </a>
+        <a href="#ranking" class="nav-link">
+          <span class="nav-icon">★</span>
+          <span>Ranking</span>
+        </a>
+        <a href="#audiencia" class="nav-link">
+          <span class="nav-icon">◉</span>
+          <span>Audiência</span>
+        </a>
+        <a href="#descoberta" class="nav-link">
+          <span class="nav-icon">⌕</span>
+          <span>Descoberta</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span id="dataSourceLabel">Verificando fonte de dados...</span>
+        <small id="dataSourceHelp">YouTube Analytics</small>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu" id="mobileMenu" aria-label="Abrir menu">☰</button>
+          <div>
+            <p class="eyebrow">Painel executivo</p>
+            <h1>YouTube Analytics</h1>
+            <p class="subtitle">Acompanhe o alcance e o envolvimento dos últimos cultos.</p>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="youtube-connection" id="youtubeConnection">
+            <span class="connection-dot"></span>
+            <span class="connection-text">Verificando...</span>
+          </div>
+          
+          <div class="period-selector" id="periodSelector">
+            <button class="period-btn active" data-period="30d">30 dias</button>
+            <button class="period-btn" data-period="6m">6 meses</button>
+            <button class="period-btn" data-period="12m">12 meses</button>
+          </div>
+          <button class="icon-btn" id="refreshButton" title="Atualizar painel" aria-label="Atualizar painel">↻</button>
+        </div>
+      </header>
+
+      <div class="connection-banner" id="connectionBanner" hidden></div>
+      <div class="api-warning" id="apiWarning" hidden></div>
+
+      <section id="visao-geral" class="section-block">
+        <div class="section-heading compact">
+          <div>
+            <p class="eyebrow">Resumo do período</p>
+            <h2>Visão geral</h2>
+          </div>
+          <span class="comparison-label" id="comparisonLabel">Comparado aos 30 dias anteriores</span>
+        </div>
+
+        <div class="metric-grid" id="metricGrid"></div>
+
+        <div class="dashboard-grid dashboard-grid-main">
+          <article class="panel panel-wide">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Tendência</p>
+                <h3>Evolução da audiência</h3>
+                <p class="panel-description">Visualizações e horas assistidas ao longo do período.</p>
+              </div>
+              <div class="chart-toggle" id="evolutionToggle">
+                <button class="chart-toggle-btn active" data-metric="views">Visualizações</button>
+                <button class="chart-toggle-btn" data-metric="hours">Horas</button>
+              </div>
+            </div>
+            <div class="chart-container chart-lg">
+              <canvas id="evolutionChart"></canvas>
+            </div>
+          </article>
+
+          <article class="panel insight-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Leitura rápida</p>
+                <h3>Destaques</h3>
+              </div>
+            </div>
+            <div id="insightsList" class="insights-list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="ranking" class="section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Desempenho dos cultos</p>
+            <h2>Ranking</h2>
+            <p>Compare os cultos por visualizações, tempo assistido ou retenção.</p>
+          </div>
+          <select id="rankingMetric" class="select-control" aria-label="Métrica do ranking">
+            <option value="views">Mais visualizados</option>
+            <option value="watchHours">Mais horas assistidas</option>
+            <option value="avgDurationSec">Maior tempo médio</option>
+            <option value="retention">Maior retenção</option>
+            <option value="peak">Maior pico (top visualizados)</option>
+          </select>
+        </div>
+
+        <article class="panel">
+          <div class="ranking-table-wrap">
+            <table class="ranking-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Culto</th>
+                  <th>Visualizações</th>
+                  <th>Tempo médio</th>
+                  <th>Horas</th>
+                  <th>Retenção</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="rankingBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="audiencia" class="section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Perfil dos espectadores</p>
+            <h2>Nossa audiência</h2>
+            <p>Quem assiste, de onde assiste e em quais aparelhos permanece mais tempo.</p>
+          </div>
+        </div>
+
+        <div class="dashboard-grid audience-top-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Perfil</p>
+                <h3>Sexo</h3>
+              </div>
+            </div>
+            <div class="chart-container chart-sm">
+              <canvas id="genderChart"></canvas>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Perfil</p>
+                <h3>Faixa etária</h3>
+              </div>
+            </div>
+            <div class="chart-container chart-sm">
+              <canvas id="ageChart"></canvas>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Localização</p>
+                <h3>Principais cidades</h3>
+              </div>
+            </div>
+            <div class="city-list" id="cityList"></div>
+          </article>
+        </div>
+
+        <div class="dashboard-grid audience-bottom-grid">
+          <article class="panel panel-wide">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Dispositivos</p>
+                <h3>Como assistem</h3>
+                <p class="panel-description">Participação nas visualizações e tempo médio em cada aparelho.</p>
+              </div>
+            </div>
+            <div class="device-list" id="deviceList"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Relacionamento</p>
+                <h3>Inscritos x não inscritos</h3>
+              </div>
+            </div>
+            <div class="chart-container chart-sm">
+              <canvas id="subscribersChart"></canvas>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="descoberta" class="section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Descoberta e alcance</p>
+            <h2>Como chegaram ao canal</h2>
+            <p>Entenda quais fontes trazem espectadores para os cultos.</p>
+          </div>
+        </div>
+
+        <div class="dashboard-grid discovery-grid">
+          <article class="panel panel-wide">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Origem do tráfego</p>
+                <h3>Principais fontes</h3>
+              </div>
+            </div>
+            <div class="chart-container chart-md">
+              <canvas id="trafficChart"></canvas>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Crescimento</p>
+                <h3>Inscritos conquistados</h3>
+              </div>
+            </div>
+            <div id="subscriberHighlights" class="subscriber-highlights"></div>
+          </article>
+        </div>
+      </section>
+
+      <footer class="page-footer">
+        <p>Dashboard demonstrativo · HTML, CSS e JavaScript</p>
+        <span id="lastUpdate"></span>
+      </footer>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="cultModal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Detalhes do culto</p>
+          <h2 id="modalTitle">Culto</h2>
+          <p id="modalDate" class="modal-date"></p>
+        </div>
+        <button class="modal-close" id="modalClose" aria-label="Fechar detalhes">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-metrics" id="modalMetrics"></div>
+
+        <div class="modal-charts">
+          <article class="mini-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Retenção</p>
+                <h3>Permanência durante o culto</h3>
+              </div>
+            </div>
+            <div class="chart-container chart-md">
+              <canvas id="retentionChart"></canvas>
+            </div>
+          </article>
+
+          <article class="mini-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Ao vivo</p>
+                <h3>Espectadores simultâneos</h3>
+              </div>
+            </div>
+            <div class="chart-container chart-md">
+              <canvas id="concurrentChart"></canvas>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/dados-demo.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/graficos.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
