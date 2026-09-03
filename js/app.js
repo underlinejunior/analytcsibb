@@ -3,14 +3,15 @@ const state = {
   rankingMetric: "views",
   evolutionMetric: "views",
   data: null,
-  auth: null
+  requestId: 0,
+  peaksLoading: false
 };
 
 const metricConfig = [
   { key: "views", label: "Visualizações", icon: "▶", format: formatNumber },
   { key: "watchHours", label: "Horas assistidas", icon: "◷", format: value => `${formatNumber(Math.round(value))} h` },
   { key: "avgDurationSec", label: "Tempo médio", icon: "◴", format: formatDuration },
-  { key: "peak", label: "Pico ao vivo", icon: "●", format: formatNumber },
+  { key: "avgViewsPerCult", label: "Média por culto", icon: "●", format: formatNumber },
   { key: "subscribers", label: "Novos inscritos", icon: "+", format: value => `+${formatNumber(value)}` },
   { key: "services", label: "Cultos analisados", icon: "▦", format: formatNumber }
 ];
@@ -19,10 +20,8 @@ document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   bindEvents();
-  state.auth = await buscarStatusAutenticacao();
-  renderConnection();
+  renderConnection("loading");
   await loadDashboard();
-  updateLastRefresh();
 }
 
 function bindEvents() {
@@ -32,7 +31,6 @@ function bindEvents() {
       button.classList.add("active");
       state.period = button.dataset.period;
       await loadDashboard();
-      updateLastRefresh();
     });
   });
 
@@ -45,17 +43,17 @@ function bindEvents() {
     });
   });
 
-  document.getElementById("rankingMetric").addEventListener("change", event => {
+  document.getElementById("rankingMetric").addEventListener("change", async event => {
     state.rankingMetric = event.target.value;
+    if (state.rankingMetric === "peak") {
+      await carregarPicosSobDemanda();
+    }
     renderRanking();
   });
 
   document.getElementById("refreshButton").addEventListener("click", async event => {
     event.currentTarget.classList.add("refreshing");
-    state.auth = await buscarStatusAutenticacao();
-    renderConnection();
     await loadDashboard();
-    updateLastRefresh();
     setTimeout(() => event.currentTarget.classList.remove("refreshing"), 350);
   });
 
@@ -81,7 +79,7 @@ function bindEvents() {
   });
 }
 
-function renderConnection() {
+function renderConnection(status = "connected", message = "") {
   const wrapper = document.getElementById("youtubeConnection");
   const text = wrapper.querySelector(".connection-text");
   const banner = document.getElementById("connectionBanner");
@@ -90,35 +88,53 @@ function renderConnection() {
 
   wrapper.classList.remove("connected", "disconnected");
 
-  if (state.auth?.connected) {
-    wrapper.classList.add("connected");
-    text.textContent = state.auth.channel?.title || "YouTube conectado";
+  if (status === "loading") {
+    text.textContent = "Carregando YouTube...";
+    dataSourceLabel.textContent = "Carregando dados reais...";
+    dataSourceHelp.textContent = "YouTube Analytics";
     banner.hidden = true;
+    return;
+  }
+
+  if (status === "connected") {
+    wrapper.classList.add("connected");
+    text.textContent = state.data?.channel?.title || "YouTube conectado";
     dataSourceLabel.textContent = "Dados reais do YouTube";
-    dataSourceHelp.textContent = state.auth.channel?.title || "Google Apps Script";
+    dataSourceHelp.textContent = state.data?.channel?.title || "YouTube Analytics";
+    banner.hidden = true;
     return;
   }
 
   wrapper.classList.add("disconnected");
-  text.textContent = "Modo demonstração";
-  dataSourceLabel.textContent = "Dados demonstrativos";
+  text.textContent = "Dados indisponíveis";
+  dataSourceLabel.textContent = "Sem dados carregados";
+  dataSourceHelp.textContent = "Nenhum dado fictício será exibido";
   banner.hidden = false;
-
-  if (!state.auth?.configured) {
-    banner.innerHTML = `<strong>Falta só uma configuração.</strong> Cole a URL <code>/exec</code> do Google Apps Script em <code>js/config.js</code>.`;
-    dataSourceHelp.textContent = "Apps Script ainda não configurado";
-  } else {
-    banner.innerHTML = `<strong>Apps Script configurado, mas sem acesso aos dados.</strong> ${escapeHtml(state.auth?.error || "Confira a implantação e as permissões do canal.")}`;
-    dataSourceHelp.textContent = "Confira a implantação do Apps Script";
-  }
+  banner.innerHTML = `<strong>Não foi possível carregar os dados reais.</strong> ${escapeHtml(message || "Confira a URL do Apps Script e a implantação.")}`;
 }
 
 async function loadDashboard() {
+  const requestId = ++state.requestId;
   setLoading(true);
-  try {
-    state.data = await buscarDashboard(state.period);
-    document.getElementById("comparisonLabel").textContent = state.data.comparison;
+  renderConnection("loading");
+  clearWarnings();
 
+  if (!appsScriptConfigurado()) {
+    state.data = null;
+    renderConnection("error", "A URL /exec do Google Apps Script não está configurada em js/config.js.");
+    renderEmptyDashboard();
+    setLoading(false);
+    return;
+  }
+
+  try {
+    const dados = await buscarDashboard(state.period);
+    if (requestId !== state.requestId) return;
+
+    state.data = dados;
+    document.getElementById("comparisonLabel").textContent = state.data.comparison || "";
+
+    renderConnection("connected");
     renderMetrics();
     renderEvolution();
     renderInsights();
@@ -126,14 +142,66 @@ async function loadDashboard() {
     renderAudience();
     renderDiscovery();
     renderWarnings();
+    updateLastRefresh(state.data.snapshotAt || state.data.generatedAt);
+  } catch (error) {
+    if (requestId !== state.requestId) return;
 
-    if (state.data.source === "youtube" && state.data.channel) {
-      document.getElementById("dataSourceLabel").textContent = "Dados reais do YouTube";
-      document.getElementById("dataSourceHelp").textContent = state.data.channel.title;
-    }
+    state.data = null;
+    renderConnection("error", error.message);
+    renderEmptyDashboard();
   } finally {
-    setLoading(false);
+    if (requestId === state.requestId) setLoading(false);
   }
+}
+
+async function carregarPicosSobDemanda() {
+  if (!state.data?.cults?.length || state.peaksLoading) return;
+  const candidatos = [...state.data.cults]
+    .sort((a, b) => Number(b.views || 0) - Number(a.views || 0))
+    .slice(0, 10);
+
+  if (candidatos.every(item => item.peakLoaded)) return;
+
+  state.peaksLoading = true;
+  const select = document.getElementById("rankingMetric");
+  select.disabled = true;
+  try {
+    const resposta = await buscarPicos(state.period, candidatos.map(item => item.id));
+    const byId = Object.fromEntries((resposta.peaks || []).map(item => [String(item.id), item]));
+    state.data.cults.forEach(culto => {
+      const peak = byId[String(culto.id)];
+      if (peak) {
+        culto.peak = Number(peak.peak || 0);
+        culto.avgConcurrent = Number(peak.average || 0);
+        culto.peakLoaded = true;
+      }
+    });
+    mergeWarnings(resposta.warnings);
+  } catch (error) {
+    pushWarning(`Picos simultâneos: ${error.message}`);
+  } finally {
+    state.peaksLoading = false;
+    select.disabled = false;
+    renderWarnings();
+  }
+}
+
+function clearWarnings() {
+  const warning = document.getElementById("apiWarning");
+  warning.hidden = true;
+  warning.textContent = "";
+}
+
+function mergeWarnings(items) {
+  if (!state.data || !Array.isArray(items)) return;
+  state.data.warnings = [...new Set([...(state.data.warnings || []), ...items.filter(Boolean)])];
+}
+
+function pushWarning(message) {
+  if (!message) return;
+  if (!state.data) state.data = { warnings: [] };
+  mergeWarnings([message]);
+  renderWarnings();
 }
 
 function renderWarnings() {
@@ -146,7 +214,31 @@ function renderWarnings() {
   }
 
   warning.hidden = false;
-  warning.innerHTML = `<strong>Atenção:</strong> ${warnings[0]}${warnings.length > 1 ? ` (+${warnings.length - 1} aviso${warnings.length > 2 ? "s" : ""})` : ""}`;
+  warning.innerHTML = `<strong>Atenção:</strong> ${escapeHtml(warnings[0])}${warnings.length > 1 ? ` (+${warnings.length - 1} aviso${warnings.length > 2 ? "s" : ""})` : ""}`;
+}
+
+function renderEmptyDashboard() {
+  document.getElementById("metricGrid").innerHTML = `<div class="empty-state" style="grid-column:1/-1">Nenhum dado real disponível no momento.</div>`;
+  document.getElementById("insightsList").innerHTML = `<div class="empty-state">Dados indisponíveis.</div>`;
+  document.getElementById("rankingBody").innerHTML = `<tr><td colspan="7"><div class="empty-state">Dados indisponíveis.</div></td></tr>`;
+  renderAudienceError("Dados indisponíveis.");
+  document.getElementById("subscriberHighlights").innerHTML = `<div class="empty-state">Dados indisponíveis.</div>`;
+}
+
+function renderAudienceLoading() {
+  criarGraficoSexo(document.getElementById("genderChart"), []);
+  criarGraficoIdade(document.getElementById("ageChart"), []);
+  criarGraficoInscritos(document.getElementById("subscribersChart"), []);
+  document.getElementById("cityList").innerHTML = `<div class="empty-state">Carregando audiência real...</div>`;
+  document.getElementById("deviceList").innerHTML = `<div class="empty-state">Carregando dispositivos...</div>`;
+}
+
+function renderAudienceError(message) {
+  criarGraficoSexo(document.getElementById("genderChart"), []);
+  criarGraficoIdade(document.getElementById("ageChart"), []);
+  criarGraficoInscritos(document.getElementById("subscribersChart"), []);
+  document.getElementById("cityList").innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+  document.getElementById("deviceList").innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
 }
 
 function renderMetrics() {
@@ -331,7 +423,13 @@ function renderDiscovery() {
 }
 
 async function openCultModal(id) {
-  const culto = await buscarCulto(state.period, id);
+  let culto;
+  try {
+    culto = await buscarCulto(state.period, id);
+  } catch (error) {
+    pushWarning(`Detalhes do culto: ${error.message}`);
+    return;
+  }
   if (!culto) return;
 
   document.getElementById("modalTitle").textContent = culto.title;
@@ -380,9 +478,10 @@ function setLoading(loading) {
   document.body.classList.toggle("dashboard-loading", Boolean(loading));
 }
 
-function updateLastRefresh() {
+function updateLastRefresh(generatedAt) {
+  const date = generatedAt ? new Date(generatedAt) : new Date();
   document.getElementById("lastUpdate").textContent =
-    `Atualizado em ${new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`;
+    `Dados gerados em ${date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`;
 }
 
 function formatNumber(value) {
