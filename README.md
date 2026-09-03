@@ -1,128 +1,130 @@
-# Dashboard YouTube da Igreja — HTML/CSS/JS + Google Apps Script
+# IBB YouTube Analytics — Firebase Realtime Database
 
-Esta versão foi feita para ser simples:
+Versão sem VPS, sem Node e sem dependência do Web App do Apps Script no navegador.
 
-- **Frontend:** HTML + CSS + JavaScript puro.
-- **Hospedagem:** GitHub Pages (ou qualquer hospedagem estática).
-- **Dados privados do YouTube:** Google Apps Script.
-- **Sem VPS, sem Node.js, sem banco, sem `.env`, sem tela de login.**
-- Depois de configurado: **abriu a página → visualizou o dashboard**.
-
-## Estrutura
+## Arquitetura
 
 ```text
-dashboard-youtube-appsscript/
-├── index.html
-├── css/
-│   └── style.css
-├── js/
-│   ├── config.js          ← cole aqui a URL /exec do Apps Script
-│   ├── api.js
-│   ├── app.js
-│   ├── graficos.js
-│   └── dados-demo.js
-└── apps-script/
-    ├── Code.gs            ← backend Google
-    └── appsscript.json
+YouTube Data API + YouTube Analytics API
+                ↓
+          Google Apps Script
+                ↓
+      Firebase Realtime Database
+                ↓
+    GitHub Pages (HTML/CSS/JS)
 ```
 
----
+O Apps Script funciona apenas como coletor agendado. O dashboard lê um JSON persistente no Firebase, por isso abre rapidamente e funciona da mesma forma em Chrome, Edge, Firefox, Safari e celulares.
 
-# Configuração rápida
+**Não há dados fictícios.** Se um período ainda não foi gravado, o painel mostra que os dados reais ainda não estão disponíveis.
 
-## 1. Criar o Google Apps Script
-
-Use **uma conta Google que tenha acesso ao canal da igreja**.
-
-> Se você quiser usar uma conta técnica diferente da conta principal da igreja, adicione essa conta como administradora/gerente do canal antes.
-
-1. Acesse `script.google.com`.
-2. Crie um **Novo projeto**.
-3. Apague o conteúdo do `Code.gs`.
-4. Copie todo o conteúdo de `apps-script/Code.gs` deste projeto e cole lá.
-
-### Ativar os dois serviços do YouTube
-
-No editor do Apps Script:
-
-1. Na lateral esquerda, em **Serviços**, clique em `+`.
-2. Adicione **YouTube Data API v3** / **YouTube**.
-3. Clique novamente em `+`.
-4. Adicione **YouTube Analytics API v2** / **YouTube Analytics**.
-
-O projeto já inclui `appsscript.json` como referência, mas adicionar os serviços pela interface é a forma mais simples.
-
-## 2. Autorizar uma única vez
-
-No seletor de funções do Apps Script:
-
-1. Escolha a função `autorizar`.
-2. Clique em **Executar**.
-3. O Google pedirá autorização.
-4. Autorize usando a conta que tem acesso ao canal.
-
-Depois abra **Registro de execução**. Deve aparecer algo parecido com:
+## Estrutura do banco
 
 ```text
-Canal autorizado: Nome do Canal (UC...)
+youtubeDashboard/
+├── meta/
+├── periods/
+│   ├── 30d/
+│   ├── 6m/
+│   └── 12m/
+└── details/
+    └── VIDEO_ID/
 ```
 
-Se aparecer o canal certo, pronto.
+## 1. Criar o Realtime Database
 
-### Se a conta tiver mais de um canal
+No Firebase Console:
 
-Abra o início de `Code.gs` e preencha:
+1. Abra seu projeto (ou crie um novo).
+2. Vá em **Build > Realtime Database**.
+3. Crie o banco.
+4. Copie a **URL do Realtime Database**.
+5. Em **Regras**, publique o conteúdo de `firebase-rules.json`.
 
-```javascript
-CHANNEL_ID: 'UCxxxxxxxxxxxxxxxx'
-```
+As regras deixam somente `youtubeDashboard` público para leitura e bloqueiam escrita pelo navegador. A escrita do Apps Script é autenticada por uma conta de serviço.
 
-Depois execute `autorizar` novamente.
+## 2. Gerar a conta de serviço
 
-## 3. Publicar o Apps Script
+No Firebase:
 
-No canto superior direito:
+**Configurações do projeto > Contas de serviço > Gerar nova chave privada**.
 
-1. **Implantar** → **Nova implantação**.
-2. Tipo: **Aplicativo da Web**.
-3. **Executar como:** `Eu`.
-4. **Quem pode acessar:** `Qualquer pessoa`.
-5. Clique em **Implantar**.
-6. Copie a URL que termina em `/exec`.
+Será baixado um JSON. Ele contém uma chave privada e **nunca deve ir para o GitHub ou para o JavaScript do site**.
+
+## 3. Configurar o Apps Script
+
+Use `apps-script/Code.gs`.
+
+Mantenha/adicone os serviços avançados:
+
+- YouTube Data API v3 (`YouTube`)
+- YouTube Analytics API v2 (`YouTubeAnalytics`)
+
+Em **Configurações do projeto > Propriedades do script**, crie duas propriedades:
+
+### `FIREBASE_DATABASE_URL`
 
 Exemplo:
 
 ```text
-https://script.google.com/macros/s/AKfycbxxxxxxxxxxxxxxxx/exec
+https://meu-projeto-default-rtdb.firebaseio.com
 ```
 
-Não use a URL `/dev`.
+Use a URL exata mostrada pelo seu Realtime Database; algumas regiões usam `firebasedatabase.app`.
 
-## 4. Colar a URL no dashboard
+### `FIREBASE_SERVICE_ACCOUNT_JSON`
 
-Abra:
+Cole o conteúdo **completo** do JSON baixado em Contas de serviço.
+
+Depois execute no editor:
+
+1. `autorizar()` — uma vez, para liberar acesso ao canal IBB Parnaíba.
+2. `prepararFirebase()` — testa o Firebase, grava 30 dias e instala os gatilhos.
+
+Para preencher todos os períodos imediatamente, execute também, um por vez:
 
 ```text
-js/config.js
+sincronizar6m
+sincronizar12m
+sincronizarPicosFirebase
+sincronizarDetalhesFirebase
 ```
 
-Troque:
+Também existe `sincronizarTudoFirebase()`, mas executar separadamente é mais seguro contra limite de tempo do Apps Script.
+
+### Não precisa mais publicar o Apps Script como Web App
+
+A URL `/exec`, JSONP, `/u/2/` e o comportamento de múltiplas contas deixam de participar do dashboard.
+
+## 4. Atualização automática
+
+`prepararFirebase()` cria estes gatilhos:
+
+- **30 dias:** 15 minutos
+- **6 meses:** 1 hora
+- **12 meses:** 6 horas
+- **picos das lives:** 1 hora
+- **curvas de retenção/simultâneos:** 6 horas, em rodízio
+
+O horário da última atualização fica gravado junto do snapshot e aparece no rodapé do painel.
+
+## 5. Configurar o frontend
+
+Abra `js/config.js`:
 
 ```javascript
-APPS_SCRIPT_URL: "COLE_AQUI_A_URL_DO_APPS_SCRIPT"
+const CONFIG_APP = {
+  FIREBASE_DATABASE_URL: "https://SEU-BANCO.firebaseio.com",
+  FIREBASE_ROOT: "youtubeDashboard",
+  TEMPO_LIMITE_MS: 8000
+};
 ```
 
-por:
+É só isso. O frontend **não recebe** API Key do YouTube, OAuth token nem chave privada do Firebase.
 
-```javascript
-APPS_SCRIPT_URL: "https://script.google.com/macros/s/SEU_ID/exec"
-```
+## 6. GitHub Pages
 
-Salve.
-
-## 5. Colocar no GitHub Pages
-
-Envie para um repositório do GitHub apenas:
+Envie para o repositório:
 
 ```text
 index.html
@@ -130,134 +132,26 @@ css/
 js/
 ```
 
-A pasta `apps-script/` é só para configuração do Google e não precisa ficar publicada.
+O arquivo `firebase-rules.json` pode ficar no repositório; ele não contém segredo. A chave da conta de serviço **não pode** ficar no repositório.
 
-No GitHub:
+## Leitura do frontend
 
-1. **Settings**.
-2. **Pages**.
-3. **Deploy from a branch**.
-4. Escolha `main` e `/root`.
-5. Salve.
-
-Depois o endereço ficará parecido com:
+O JavaScript usa a API REST do Firebase, por exemplo:
 
 ```text
-https://usuario.github.io/dashboard-youtube/
+https://SEU-BANCO/youtubeDashboard/periods/30d.json
 ```
 
-Se quiser, depois pode apontar um subdomínio como:
+Ao clicar em 6 meses, ele lê somente `periods/6m`; ao clicar em 12 meses, somente `periods/12m`. Nenhuma consulta ao YouTube acontece durante a abertura da página.
+
+## Atualização manual
+
+Quando quiser forçar dados novos imediatamente, execute no Apps Script a função correspondente ao período:
 
 ```text
-analytics.ibbparnaiba.com.br
+sincronizar30d
+sincronizar6m
+sincronizar12m
 ```
 
----
-
-# O que o dashboard consulta
-
-## YouTube Data API v3
-
-Usada para identificar:
-
-- canal;
-- vídeos enviados;
-- transmissões ao vivo concluídas;
-- título do culto;
-- thumbnail;
-- data real da transmissão.
-
-## YouTube Analytics API v2
-
-Usada para:
-
-- visualizações;
-- horas assistidas;
-- duração média;
-- inscritos conquistados;
-- evolução por dia/mês;
-- sexo;
-- faixa etária;
-- cidades;
-- dispositivos;
-- tempo médio por dispositivo;
-- inscritos x não inscritos;
-- fontes de tráfego;
-- retenção por culto;
-- média e pico de espectadores simultâneos.
-
-## YouTube Reporting API
-
-Não é necessária para a primeira versão do painel.
-
-A Reporting API é mais indicada para **relatórios em massa e históricos armazenados**, enquanto a Analytics API é indicada para consultas segmentadas em tempo real, que é exatamente o funcionamento deste dashboard.
-
-Se futuramente quisermos manter uma base histórica própria, aí podemos acrescentar a Reporting API sem mudar o frontend.
-
----
-
-# Como o acesso direto funciona
-
-Depois de configurado:
-
-```text
-Pastor abre o endereço
-        ↓
-HTML/CSS/JS carrega
-        ↓
-consulta o Web App do Apps Script
-        ↓
-Apps Script executa como a conta autorizada
-        ↓
-consulta YouTube Data + Analytics
-        ↓
-dashboard aparece
-```
-
-O visitante **não faz login no Google** e não recebe nenhum token da conta da igreja.
-
-## Importante sobre privacidade
-
-A implantação foi pensada para o requisito “abriu → visualizou”. Portanto, o endpoint do Apps Script é público e retorna apenas os dados que o próprio dashboard exibe.
-
-Não coloque senhas, tokens, e-mails privados ou outras informações sensíveis dentro das respostas do `Code.gs`.
-
----
-
-# Cache
-
-O Apps Script guarda o dashboard em cache por 10 minutos e os detalhes de cada culto por 30 minutos.
-
-Isso deixa a página mais rápida e reduz chamadas às APIs do YouTube.
-
-Para forçar atualização, execute a função:
-
-```javascript
-limparCache()
-```
-
-no editor do Apps Script, ou aguarde a expiração automática.
-
----
-
-# Filtrar somente cultos pelo título
-
-Por padrão, o sistema considera **todas as transmissões ao vivo concluídas** como possíveis cultos.
-
-Se o canal também faz lives de eventos que não devem entrar no ranking, altere em `Code.gs`:
-
-```javascript
-FILTER_BY_TITLE: true
-```
-
-E ajuste:
-
-```javascript
-CULT_KEYWORDS: ['culto', 'celebração', 'ceia', 'oração']
-```
-
----
-
-# Modo demonstração
-
-Se `js/config.js` ainda não tiver a URL correta do Apps Script, o dashboard continua abrindo com dados demonstrativos. Isso permite testar o layout antes de conectar o canal real.
+Depois basta clicar no botão de atualizar do dashboard para reler o Firebase.

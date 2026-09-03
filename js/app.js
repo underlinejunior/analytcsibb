@@ -92,9 +92,9 @@ function renderConnection(status = "connected", message = "") {
   wrapper.classList.remove("connected", "disconnected");
 
   if (status === "loading") {
-    text.textContent = "Carregando YouTube...";
+    text.textContent = "Carregando dados...";
     dataSourceLabel.textContent = "Carregando dados reais...";
-    dataSourceHelp.textContent = "YouTube Analytics";
+    dataSourceHelp.textContent = "Firebase · YouTube Analytics";
     banner.hidden = true;
     return;
   }
@@ -102,8 +102,8 @@ function renderConnection(status = "connected", message = "") {
   if (status === "connected") {
     wrapper.classList.add("connected");
     text.textContent = state.data?.channel?.title || "YouTube conectado";
-    dataSourceLabel.textContent = "Dados reais do YouTube";
-    dataSourceHelp.textContent = state.data?.channel?.title || "YouTube Analytics";
+    dataSourceLabel.textContent = "Dados reais do YouTube via Firebase";
+    dataSourceHelp.textContent = state.data?.channel?.title || "Firebase · YouTube Analytics";
     banner.hidden = true;
     return;
   }
@@ -113,7 +113,7 @@ function renderConnection(status = "connected", message = "") {
   dataSourceLabel.textContent = "Sem dados carregados";
   dataSourceHelp.textContent = "Nenhum dado fictício será exibido";
   banner.hidden = false;
-  banner.innerHTML = `<strong>Não foi possível carregar os dados reais.</strong> ${escapeHtml(message || "Confira a URL do Apps Script e a implantação.")}`;
+  banner.innerHTML = `<strong>Não foi possível carregar os dados reais.</strong> ${escapeHtml(message || "Confira a URL do Firebase e se o coletor do Apps Script já gravou os dados.")}`;
 }
 
 async function loadDashboard() {
@@ -124,7 +124,7 @@ async function loadDashboard() {
 
   if (!appsScriptConfigurado()) {
     state.data = null;
-    renderConnection("error", "A URL /exec do Google Apps Script não está configurada em js/config.js.");
+    renderConnection("error", "A URL do Firebase Realtime Database não está configurada em js/config.js.");
     renderEmptyDashboard();
     setLoading(false);
     return;
@@ -138,7 +138,7 @@ async function loadDashboard() {
     // Nunca aceita um snapshot de outro período. Isso evita que um cache
     // antigo de 30d seja desenhado quando o usuário pediu 6m ou 12m.
     if (dados?.period && dados.period !== periodoSolicitado) {
-      throw new Error(`O Apps Script devolveu ${dados.period}, mas o período solicitado foi ${periodoSolicitado}. Atualize os snapshots.`);
+      throw new Error(`O Firebase devolveu ${dados.period}, mas o período solicitado foi ${periodoSolicitado}. Atualize o banco.`);
     }
 
     state.data = dados;
