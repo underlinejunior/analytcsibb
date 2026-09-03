@@ -14,17 +14,39 @@ function destroyChart(chart) {
   if (chart) chart.destroy();
 }
 
+function destruirGraficosDashboard() {
+  [
+    evolutionChartInstance,
+    genderChartInstance,
+    ageChartInstance,
+    subscribersChartInstance,
+    trafficChartInstance
+  ].forEach(chart => {
+    if (chart) chart.destroy();
+  });
+
+  evolutionChartInstance = null;
+  genderChartInstance = null;
+  ageChartInstance = null;
+  subscribersChartInstance = null;
+  trafficChartInstance = null;
+}
+
 function criarGraficoEvolucao(canvas, dados, metric = "views") {
   destroyChart(evolutionChartInstance);
+  evolutionChartInstance = null;
 
   const isViews = metric === "views";
+  const labels = Array.isArray(dados?.labels) ? [...dados.labels] : [];
+  const values = Array.isArray(dados?.[metric]) ? [...dados[metric]].map(Number) : [];
+
   evolutionChartInstance = new Chart(canvas, {
     type: "line",
     data: {
-      labels: dados.labels,
+      labels,
       datasets: [{
         label: isViews ? "Visualizações" : "Horas assistidas",
-        data: dados[metric],
+        data: values,
         borderColor: "#b32025",
         backgroundColor: "rgba(179, 32, 37, 0.08)",
         fill: true,
@@ -44,6 +66,7 @@ function criarGraficoEvolucao(canvas, dados, metric = "views") {
 
 function criarGraficoSexo(canvas, dados) {
   destroyChart(genderChartInstance);
+  genderChartInstance = null;
 
   genderChartInstance = new Chart(canvas, {
     type: "doughnut",
@@ -62,6 +85,7 @@ function criarGraficoSexo(canvas, dados) {
 
 function criarGraficoIdade(canvas, dados) {
   destroyChart(ageChartInstance);
+  ageChartInstance = null;
 
   ageChartInstance = new Chart(canvas, {
     type: "bar",
@@ -84,6 +108,7 @@ function criarGraficoIdade(canvas, dados) {
 
 function criarGraficoInscritos(canvas, dados) {
   destroyChart(subscribersChartInstance);
+  subscribersChartInstance = null;
 
   subscribersChartInstance = new Chart(canvas, {
     type: "doughnut",
@@ -102,6 +127,7 @@ function criarGraficoInscritos(canvas, dados) {
 
 function criarGraficoTrafego(canvas, dados) {
   destroyChart(trafficChartInstance);
+  trafficChartInstance = null;
 
   trafficChartInstance = new Chart(canvas, {
     type: "bar",

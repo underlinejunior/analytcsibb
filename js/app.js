@@ -30,6 +30,9 @@ function bindEvents() {
       document.querySelectorAll(".period-btn").forEach(btn => btn.classList.remove("active"));
       button.classList.add("active");
       state.period = button.dataset.period;
+      // Remove imediatamente os gráficos do período anterior para não
+      // deixar 30d visível enquanto 6m/12m está sendo carregado.
+      destruirGraficosDashboard();
       await loadDashboard();
     });
   });
@@ -128,8 +131,15 @@ async function loadDashboard() {
   }
 
   try {
-    const dados = await buscarDashboard(state.period);
+    const periodoSolicitado = state.period;
+    const dados = await buscarDashboard(periodoSolicitado);
     if (requestId !== state.requestId) return;
+
+    // Nunca aceita um snapshot de outro período. Isso evita que um cache
+    // antigo de 30d seja desenhado quando o usuário pediu 6m ou 12m.
+    if (dados?.period && dados.period !== periodoSolicitado) {
+      throw new Error(`O Apps Script devolveu ${dados.period}, mas o período solicitado foi ${periodoSolicitado}. Atualize os snapshots.`);
+    }
 
     state.data = dados;
     document.getElementById("comparisonLabel").textContent = state.data.comparison || "";
@@ -218,6 +228,8 @@ function renderWarnings() {
 }
 
 function renderEmptyDashboard() {
+  // Garante que um erro em 6m/12m não deixe na tela os gráficos do período anterior.
+  destruirGraficosDashboard();
   document.getElementById("metricGrid").innerHTML = `<div class="empty-state" style="grid-column:1/-1">Nenhum dado real disponível no momento.</div>`;
   document.getElementById("insightsList").innerHTML = `<div class="empty-state">Dados indisponíveis.</div>`;
   document.getElementById("rankingBody").innerHTML = `<tr><td colspan="7"><div class="empty-state">Dados indisponíveis.</div></td></tr>`;
