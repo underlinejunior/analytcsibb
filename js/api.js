@@ -1,6 +1,13 @@
+function normalizarFirebaseUrl(valor) {
+  return String(valor || "")
+    .trim()
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "");
+}
+
 function firebaseConfigurado() {
-  const url = String(CONFIG_APP?.FIREBASE_DATABASE_URL || "").trim();
-  return /^https:\/\/.+\.(firebaseio\.com|firebasedatabase\.app)$/i.test(url);
+  const url = normalizarFirebaseUrl(CONFIG_APP?.FIREBASE_DATABASE_URL);
+  return /^https:\/\/[a-z0-9.-]+\.(firebaseio\.com|firebasedatabase\.app)$/i.test(url);
 }
 
 // Compatibilidade com o app.js das versões anteriores.
@@ -9,7 +16,7 @@ function appsScriptConfigurado() {
 }
 
 function firebaseBaseUrl() {
-  return String(CONFIG_APP.FIREBASE_DATABASE_URL || "").trim().replace(/\/$/, "");
+  return normalizarFirebaseUrl(CONFIG_APP?.FIREBASE_DATABASE_URL);
 }
 
 function firebaseRoot() {
@@ -37,6 +44,7 @@ async function firebaseGet(path) {
       mode: "cors",
       cache: "no-store",
       credentials: "omit",
+      redirect: "follow",
       headers: { "Accept": "application/json" },
       signal: controller.signal
     });
@@ -44,8 +52,13 @@ async function firebaseGet(path) {
     if (!resposta.ok) {
       let detalhe = "";
       try {
-        const body = await resposta.json();
-        detalhe = body?.error ? `: ${body.error}` : "";
+        const texto = await resposta.text();
+        try {
+          const body = JSON.parse(texto);
+          detalhe = body?.error ? `: ${body.error}` : (texto ? `: ${texto.slice(0, 180)}` : "");
+        } catch (_) {
+          detalhe = texto ? `: ${texto.slice(0, 180)}` : "";
+        }
       } catch (_) {}
       throw new Error(`Firebase respondeu HTTP ${resposta.status}${detalhe}`);
     }
@@ -59,6 +72,19 @@ async function firebaseGet(path) {
   } finally {
     window.clearTimeout(timeout);
   }
+}
+
+async function testarConexaoFirebase() {
+  if (!firebaseConfigurado()) {
+    throw new Error(`URL inválida em js/config.js: ${String(CONFIG_APP?.FIREBASE_DATABASE_URL || "(vazia)")}`);
+  }
+
+  // Meta é pequeno e confirma de uma vez URL + regras públicas + caminho raiz.
+  const meta = await firebaseGet(`${firebaseRoot()}/meta`);
+  if (!meta) {
+    throw new Error(`Firebase conectado, mas o caminho /${firebaseRoot()}/meta está vazio ou não existe.`);
+  }
+  return meta;
 }
 
 async function buscarDashboard(periodo = "30d") {

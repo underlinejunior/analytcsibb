@@ -132,6 +132,11 @@ async function loadDashboard() {
 
   try {
     const periodoSolicitado = state.period;
+
+    // Teste mínimo: confirma que o GitHub/qualquer navegador consegue ler
+    // publicamente o mesmo Realtime Database alimentado pelo coletor.
+    await testarConexaoFirebase();
+
     const dados = await buscarDashboard(periodoSolicitado);
     if (requestId !== state.requestId) return;
 

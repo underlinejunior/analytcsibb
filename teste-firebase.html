@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Teste Firebase</title></head>
+<body style="font-family:Arial,sans-serif;max-width:900px;margin:40px auto;padding:20px"><h1>Teste do Firebase</h1><pre id="out">Testando...</pre>
+<script src="js/config.js?v=9"></script><script src="js/api.js?v=9"></script>
+<script>
+(async()=>{const out=document.getElementById('out'); try { const meta=await testarConexaoFirebase(); const p=await buscarDashboard('30d'); out.textContent='OK - Firebase conectado\n\nURL: '+firebaseBaseUrl()+'\nRaiz: '+firebaseRoot()+'\n\nMETA:\n'+JSON.stringify(meta,null,2)+'\n\n30d encontrado: '+Boolean(p)+'\nCultos: '+(p.cults?.length||0); } catch(e){ out.textContent='ERRO\n\n'+e.message+'\n\nURL configurada: '+String(CONFIG_APP?.FIREBASE_DATABASE_URL||''); }})();
+</script></body></html>
