@@ -37,15 +37,22 @@ function criarGraficoEvolucao(canvas, dados, metric = "views") {
   evolutionChartInstance = null;
 
   const isViews = metric === "views";
+  const isAverageDuration = metric === "avgDurationSec";
   const labels = Array.isArray(dados?.labels) ? [...dados.labels] : [];
   const values = Array.isArray(dados?.[metric]) ? [...dados[metric]].map(Number) : [];
+
+  const datasetLabel = isViews
+    ? "Visualizações acumuladas"
+    : isAverageDuration
+      ? "Tempo médio por visualização"
+      : "Horas assistidas";
 
   evolutionChartInstance = new Chart(canvas, {
     type: "line",
     data: {
       labels,
       datasets: [{
-        label: isViews ? "Visualizações" : "Horas assistidas",
+        label: datasetLabel,
         data: values,
         borderColor: "#b32025",
         backgroundColor: "rgba(179, 32, 37, 0.08)",
@@ -59,9 +66,23 @@ function criarGraficoEvolucao(canvas, dados, metric = "views") {
     options: chartOptions({
       yCallback: isViews
         ? value => new Intl.NumberFormat("pt-BR", { notation: "compact" }).format(value)
-        : value => `${value} h`
+        : isAverageDuration
+          ? value => formatSecondsForChart(value)
+          : value => `${value} h`,
+      tooltipValueCallback: isAverageDuration
+        ? value => formatSecondsForChart(value)
+        : null
     })
   });
+}
+
+function formatSecondsForChart(value) {
+  const total = Math.max(0, Math.round(Number(value || 0)));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}min`;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function criarGraficoSexo(canvas, dados) {
@@ -239,7 +260,7 @@ function donutOptions() {
   };
 }
 
-function chartOptions({ legend = true, yMax = undefined, yCallback = value => value } = {}) {
+function chartOptions({ legend = true, yMax = undefined, yCallback = value => value, tooltipValueCallback = null } = {}) {
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -259,7 +280,10 @@ function chartOptions({ legend = true, yMax = undefined, yCallback = value => va
       tooltip: {
         backgroundColor: "#172033",
         padding: 10,
-        displayColors: false
+        displayColors: false,
+        callbacks: tooltipValueCallback ? {
+          label: context => ` ${context.dataset.label}: ${tooltipValueCallback(context.parsed.y)}`
+        } : undefined
       }
     },
     scales: {

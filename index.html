@@ -66,7 +66,8 @@
           </div>
           
           <div class="period-selector" id="periodSelector">
-            <button class="period-btn active" data-period="30d">30 dias</button>
+            <button class="period-btn active" data-period="7d">7 dias</button>
+            <button class="period-btn" data-period="30d">30 dias</button>
             <button class="period-btn" data-period="6m">6 meses</button>
             <button class="period-btn" data-period="12m">12 meses</button>
           </div>
@@ -83,7 +84,7 @@
             <p class="eyebrow">Resumo do período</p>
             <h2>Visão geral</h2>
           </div>
-          <span class="comparison-label" id="comparisonLabel">Comparado aos 30 dias anteriores</span>
+          <span class="comparison-label" id="comparisonLabel">Comparado aos 7 dias anteriores</span>
         </div>
 
         <div class="metric-grid" id="metricGrid"></div>
@@ -93,12 +94,12 @@
             <div class="panel-header">
               <div>
                 <p class="eyebrow">Tendência</p>
-                <h3>Evolução da audiência</h3>
-                <p class="panel-description">Visualizações e horas assistidas ao longo do período.</p>
+                <h3>Visualizações acumuladas no período</h3>
+                <p class="panel-description">Acumulado real das visualizações dos cultos dentro do período selecionado.</p>
               </div>
               <div class="chart-toggle" id="evolutionToggle">
-                <button class="chart-toggle-btn active" data-metric="views">Visualizações</button>
-                <button class="chart-toggle-btn" data-metric="hours">Horas</button>
+                <button class="chart-toggle-btn active" data-metric="views">Acumuladas</button>
+                <button class="chart-toggle-btn" data-metric="avgDurationSec">Tempo médio</button>
               </div>
             </div>
             <div class="chart-container chart-lg">
@@ -310,9 +311,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="js/config.js?v=9"></script>
-  <script src="js/api.js?v=9"></script>
-  <script src="js/graficos.js?v=9"></script>
-  <script src="js/app.js?v=9"></script>
+  <script src="js/config.js?v=15"></script>
+  <script src="js/api.js?v=15"></script>
+  <script src="js/graficos.js?v=15"></script>
+  <script src="js/app.js?v=15"></script>
 </body>
 </html>

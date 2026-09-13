@@ -1,5 +1,5 @@
 const state = {
-  period: "30d",
+  period: "7d",
   rankingMetric: "views",
   evolutionMetric: "views",
   data: null,
@@ -9,8 +9,8 @@ const state = {
 
 const metricConfig = [
   { key: "views", label: "Visualizações", icon: "▶", format: formatNumber },
-  { key: "watchHours", label: "Horas assistidas", icon: "◷", format: value => `${formatNumber(Math.round(value))} h` },
-  { key: "avgDurationSec", label: "Tempo médio", icon: "◴", format: formatDuration },
+  { key: "watchHours", label: "Horas assistidas (total)", icon: "◷", format: value => `${formatNumber(Math.round(value))} h` },
+  { key: "avgDurationSec", label: "Tempo médio por visualização", icon: "◴", format: formatDuration },
   { key: "avgViewsPerCult", label: "Média por culto", icon: "●", format: formatNumber },
   { key: "subscribers", label: "Novos inscritos", icon: "+", format: value => `+${formatNumber(value)}` },
   { key: "services", label: "Cultos analisados", icon: "▦", format: formatNumber }
@@ -135,7 +135,9 @@ async function loadDashboard() {
 
     // Teste mínimo: confirma que o GitHub/qualquer navegador consegue ler
     // publicamente o mesmo Realtime Database alimentado pelo coletor.
-    await testarConexaoFirebase();
+    if (typeof testarConexaoFirebase === "function") {
+      await testarConexaoFirebase();
+    }
 
     const dados = await buscarDashboard(periodoSolicitado);
     if (requestId !== state.requestId) return;
@@ -276,7 +278,7 @@ function renderMetrics() {
 function renderEvolution() {
   criarGraficoEvolucao(
     document.getElementById("evolutionChart"),
-    state.data.evolution || { labels: [], views: [], hours: [] },
+    state.data.evolution || { labels: [], views: [], hours: [], avgDurationSec: [] },
     state.evolutionMetric
   );
 }
@@ -299,7 +301,7 @@ function renderInsights() {
 
   const insights = [
     {
-      title: "Maior audiência",
+      title: "Culto mais assistido",
       text: `${mostViewed.title} de ${mostViewed.date} lidera o período com ${formatNumber(mostViewed.views)} visualizações.`
     },
     {
@@ -526,9 +528,9 @@ function changeClass(change) {
 }
 
 function formatChange(change) {
-  if (change === null || change === undefined || Number.isNaN(Number(change))) return "Sem base anterior para comparar";
-  if (change > 0) return `↑ ${change.toFixed(1).replace(".", ",")}% vs. período anterior`;
-  if (change < 0) return `↓ ${Math.abs(change).toFixed(1).replace(".", ",")}% vs. período anterior`;
+  if (change === null || change === undefined || Number.isNaN(Number(change))) return "Sem comparação semanal";
+  if (change > 0) return `↑ ${change.toFixed(1).replace(".", ",")}% vs. semana anterior`;
+  if (change < 0) return `↓ ${Math.abs(change).toFixed(1).replace(".", ",")}% vs. semana anterior`;
   return "Sem variação relevante";
 }
 

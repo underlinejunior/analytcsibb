@@ -87,7 +87,7 @@ async function testarConexaoFirebase() {
   return meta;
 }
 
-async function buscarDashboard(periodo = "30d") {
+async function buscarDashboard(periodo = "7d") {
   const dados = await firebaseGet(`${firebaseRoot()}/periods/${periodo}`);
   if (!dados) {
     throw new Error(`Ainda não há dados reais gravados no Firebase para ${periodo}.`);
@@ -97,7 +97,7 @@ async function buscarDashboard(periodo = "30d") {
 
 // Os picos ficam salvos junto dos cultos no snapshot. Esta função existe para
 // manter compatibilidade com o seletor de ranking sem acessar o Apps Script.
-async function buscarPicos(periodo = "30d", ids = []) {
+async function buscarPicos(periodo = "7d", ids = []) {
   const dados = await buscarDashboard(periodo);
   const wanted = new Set((ids || []).map(String));
   const peaks = (dados.cults || [])
