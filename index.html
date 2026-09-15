@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/v19.css?v=19.4">
+  <link rel="stylesheet" href="css/v19.css?v=19.5">
 </head>
 <body>
   <div class="app-shell">
@@ -40,6 +40,10 @@
         <a href="#descoberta" class="nav-link">
           <span class="nav-icon">⌕</span>
           <span>Descoberta</span>
+        </a>
+        <a href="#recomendacoes" class="nav-link">
+          <span class="nav-icon">✓</span>
+          <span>Recomendações</span>
         </a>
       </nav>
 
@@ -268,6 +272,19 @@
         </div>
       </section>
 
+      <section id="recomendacoes" class="section-block">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Parecer do período</p>
+            <h2>O que podemos melhorar</h2>
+            <p>Leitura automática dos dados reais com ações práticas para retenção, inscritos e visualizações.</p>
+          </div>
+        </div>
+
+        <div class="recommendations-grid" id="recommendationsGrid"></div>
+        <p class="recommendations-note">As recomendações apontam oportunidades observadas nos dados. Elas não atribuem causa a uma alta ou queda quando os dados não permitem comprovar essa relação.</p>
+      </section>
+
       <footer class="page-footer">
         <p>Dados reais do YouTube · Atualização automática</p>
         <span id="lastUpdate"></span>
@@ -319,9 +336,10 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <script src="js/config.js?v=19.4"></script>
-  <script src="js/api.js?v=19.4"></script>
-  <script src="js/graficos.js?v=19.4"></script>
-  <script src="js/app.js?v=19.4"></script>
+  <script src="js/config.js?v=19.5"></script>
+  <script src="js/api.js?v=19.5"></script>
+  <script src="js/graficos.js?v=19.5"></script>
+  <script src="js/recomendacoes.js?v=19.5"></script>
+  <script src="js/app.js?v=19.5"></script>
 </body>
 </html>

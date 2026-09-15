@@ -164,6 +164,7 @@ async function loadDashboard() {
     renderRanking();
     renderAudience();
     renderDiscovery();
+    renderRecommendations();
     renderWarnings();
     updateLastRefresh(state.data.snapshotAt || state.data.generatedAt);
   } catch (error) {
@@ -249,6 +250,8 @@ function renderEmptyDashboard() {
   document.getElementById("rankingBody").innerHTML = `<tr><td colspan="7"><div class="empty-state">Dados indisponíveis.</div></td></tr>`;
   renderAudienceError("Dados indisponíveis.");
   document.getElementById("subscriberHighlights").innerHTML = `<div class="empty-state">Dados indisponíveis.</div>`;
+  const recommendations = document.getElementById("recommendationsGrid");
+  if (recommendations) recommendations.innerHTML = `<div class="empty-state recommendations-empty">Dados indisponíveis.</div>`;
 }
 
 function renderAudienceLoading() {
@@ -547,6 +550,41 @@ function renderDiscovery() {
   }
 
   document.getElementById("subscriberHighlights").innerHTML = cards.join("");
+}
+
+function renderRecommendations() {
+  const container = document.getElementById("recommendationsGrid");
+  if (!container) return;
+
+  if (!window.RecommendationEngine || typeof window.RecommendationEngine.buildChannelRecommendations !== "function") {
+    container.innerHTML = `<div class="empty-state recommendations-empty">Não foi possível gerar o parecer deste período.</div>`;
+    return;
+  }
+
+  const items = window.RecommendationEngine.buildChannelRecommendations(state.data || {});
+  const icons = { retention: "◷", subscribers: "+", views: "▶" };
+
+  container.innerHTML = items.map(item => `
+    <article class="recommendation-card ${escapeHtmlAttribute(item.level || "neutral")}">
+      <div class="recommendation-header">
+        <div class="recommendation-title">
+          <span class="recommendation-icon">${icons[item.key] || "•"}</span>
+          <strong>${escapeHtml(item.title)}</strong>
+        </div>
+        <span class="recommendation-badge">${escapeHtml(item.badge || "Acompanhar")}</span>
+      </div>
+      <div class="recommendation-body">
+        <div>
+          <span class="recommendation-label">O que os dados mostram</span>
+          <p>${escapeHtml(item.observation)}</p>
+        </div>
+        <div class="recommendation-action">
+          <span class="recommendation-label">Ação recomendada</span>
+          <p>${escapeHtml(item.action)}</p>
+        </div>
+      </div>
+    </article>
+  `).join("");
 }
 
 async function openCultModal(id) {
