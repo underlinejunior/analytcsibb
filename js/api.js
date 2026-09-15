@@ -87,7 +87,7 @@ async function testarConexaoFirebase() {
   return meta;
 }
 
-async function buscarDashboard(periodo = "7d") {
+async function buscarDashboard(periodo = "30d") {
   const dados = await firebaseGet(`${firebaseRoot()}/periods/${periodo}`);
   if (!dados) {
     throw new Error(`Ainda não há dados reais gravados no Firebase para ${periodo}.`);
@@ -97,11 +97,18 @@ async function buscarDashboard(periodo = "7d") {
 
 // Os picos ficam salvos junto dos cultos no snapshot. Esta função existe para
 // manter compatibilidade com o seletor de ranking sem acessar o Apps Script.
-async function buscarPicos(periodo = "7d", ids = []) {
+async function buscarCultosRecentes() {
+  const base30d = await buscarDashboard("30d");
+  return Array.isArray(base30d?.recentCults) ? base30d.recentCults : [];
+}
+
+async function buscarPicos(periodo = "30d", ids = []) {
   const dados = await buscarDashboard(periodo);
   const wanted = new Set((ids || []).map(String));
-  const peaks = (dados.cults || [])
-    .filter(item => wanted.has(String(item.id)))
+  const allCults = [...(dados.cults || []), ...(dados.recentCults || [])];
+  const seen = new Set();
+  const peaks = allCults
+    .filter(item => wanted.has(String(item.id)) && !seen.has(String(item.id)) && seen.add(String(item.id)))
     .map(item => ({
       id: item.id,
       peak: Number(item.peak || 0),
@@ -111,12 +118,16 @@ async function buscarPicos(periodo = "7d", ids = []) {
 }
 
 async function buscarCulto(periodo, id) {
-  const [dados, detalhe] = await Promise.all([
+  const [dados, detalhe, recentesGlobais] = await Promise.all([
     buscarDashboard(periodo),
-    firebaseGet(`${firebaseRoot()}/details/${encodeURIComponent(id)}`).catch(() => null)
+    firebaseGet(`${firebaseRoot()}/details/${encodeURIComponent(id)}`).catch(() => null),
+    periodo === "30d" ? Promise.resolve(null) : buscarCultosRecentes().catch(() => null)
   ]);
 
-  const basico = (dados.cults || []).find(item => String(item.id) === String(id));
+  const recenteGlobal = (recentesGlobais || []).find(item => String(item.id) === String(id));
+  const basico = recenteGlobal
+    || (dados.cults || []).find(item => String(item.id) === String(id))
+    || (dados.recentCults || []).find(item => String(item.id) === String(id));
   if (!basico) return null;
 
   // Métricas numéricas do período vêm sempre do snapshot selecionado.
@@ -124,6 +135,11 @@ async function buscarCulto(periodo, id) {
   return {
     ...(detalhe || {}),
     ...basico,
+    watchHours: basico.watchHours ?? detalhe?.watchHours ?? null,
+    avgDurationSec: basico.avgDurationSec ?? detalhe?.avgDurationSec ?? null,
+    retention: basico.retention ?? detalhe?.retention ?? null,
+    subscribers: basico.subscribers ?? detalhe?.subscribers ?? null,
+    analyticsReady: basico.analyticsReady !== false || detalhe?.analyticsReady === true,
     retentionSeries: detalhe?.retentionSeries || [],
     retentionLabels: detalhe?.retentionLabels || null,
     concurrentSeries: detalhe?.concurrentSeries || [],

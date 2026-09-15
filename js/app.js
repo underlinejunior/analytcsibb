@@ -1,7 +1,6 @@
 const state = {
-  period: "7d",
+  period: "30d",
   rankingMetric: "views",
-  evolutionMetric: "views",
   data: null,
   requestId: 0,
   peaksLoading: false
@@ -37,14 +36,6 @@ function bindEvents() {
     });
   });
 
-  document.querySelectorAll(".chart-toggle-btn").forEach(button => {
-    button.addEventListener("click", () => {
-      document.querySelectorAll(".chart-toggle-btn").forEach(btn => btn.classList.remove("active"));
-      button.classList.add("active");
-      state.evolutionMetric = button.dataset.metric;
-      renderEvolution();
-    });
-  });
 
   document.getElementById("rankingMetric").addEventListener("change", async event => {
     state.rankingMetric = event.target.value;
@@ -101,9 +92,14 @@ function renderConnection(status = "connected", message = "") {
 
   if (status === "connected") {
     wrapper.classList.add("connected");
+    const analyticsPending = (state.data?.recentCults || []).some(culto => culto.analyticsReady === false);
     text.textContent = state.data?.channel?.title || "YouTube conectado";
-    dataSourceLabel.textContent = "Dados reais do YouTube via Firebase";
-    dataSourceHelp.textContent = state.data?.channel?.title || "Firebase · YouTube Analytics";
+    dataSourceLabel.textContent = analyticsPending
+      ? "Dados reais · Analytics em processamento"
+      : "Dados reais do YouTube via Firebase";
+    dataSourceHelp.textContent = analyticsPending
+      ? "Retenção e tempo médio dos cultos recentes podem levar mais tempo para aparecer"
+      : (state.data?.channel?.title || "Firebase · YouTube Analytics");
     banner.hidden = true;
     return;
   }
@@ -139,8 +135,17 @@ async function loadDashboard() {
       await testarConexaoFirebase();
     }
 
-    const dados = await buscarDashboard(periodoSolicitado);
+    const [dados, recentesIndependentes] = await Promise.all([
+      buscarDashboard(periodoSolicitado),
+      periodoSolicitado === "30d"
+        ? Promise.resolve(null)
+        : buscarCultosRecentes().catch(() => null)
+    ]);
     if (requestId !== state.requestId) return;
+
+    if (Array.isArray(recentesIndependentes) && recentesIndependentes.length) {
+      dados.recentCults = recentesIndependentes;
+    }
 
     // Nunca aceita um snapshot de outro período. Isso evita que um cache
     // antigo de 30d seja desenhado quando o usuário pediu 6m ou 12m.
@@ -153,6 +158,7 @@ async function loadDashboard() {
 
     renderConnection("connected");
     renderMetrics();
+    renderRecentCults();
     renderEvolution();
     renderInsights();
     renderRanking();
@@ -238,6 +244,7 @@ function renderEmptyDashboard() {
   // Garante que um erro em 6m/12m não deixe na tela os gráficos do período anterior.
   destruirGraficosDashboard();
   document.getElementById("metricGrid").innerHTML = `<div class="empty-state" style="grid-column:1/-1">Nenhum dado real disponível no momento.</div>`;
+  document.getElementById("recentCultsGrid").innerHTML = `<div class="empty-state recent-cults-empty">Dados indisponíveis.</div>`;
   document.getElementById("insightsList").innerHTML = `<div class="empty-state">Dados indisponíveis.</div>`;
   document.getElementById("rankingBody").innerHTML = `<tr><td colspan="7"><div class="empty-state">Dados indisponíveis.</div></td></tr>`;
   renderAudienceError("Dados indisponíveis.");
@@ -275,11 +282,94 @@ function renderMetrics() {
   }).join("");
 }
 
+
+function selectRecentCults(cults, limit = 3) {
+  return [...(cults || [])]
+    .sort((a, b) => {
+      const bTime = Date.parse(b?.startedAt || b?.dateKey || "") || 0;
+      const aTime = Date.parse(a?.startedAt || a?.dateKey || "") || 0;
+      if (bTime !== aTime) return bTime - aTime;
+      return Number(b?.views || 0) - Number(a?.views || 0);
+    })
+    .slice(0, Math.max(0, Number(limit || 0)));
+}
+
+function renderRecentCults() {
+  const grid = document.getElementById("recentCultsGrid");
+  if (!grid) return;
+
+  const recentSource = state.data?.recentCults?.length ? state.data.recentCults : (state.data?.cults || []);
+  const recent = selectRecentCults(recentSource, 3);
+  if (!recent.length) {
+    grid.innerHTML = `<div class="empty-state recent-cults-empty">Nenhum culto concluído recente foi encontrado.</div>`;
+    return;
+  }
+
+  grid.innerHTML = recent.map((culto, index) => {
+    const peakValue = culto.peakLoaded ? formatNumber(culto.peak || 0) : "—";
+    return `
+      <article class="recent-cult-card" data-id="${escapeHtmlAttribute(culto.id)}" tabindex="0" role="button" aria-label="Abrir detalhes de ${escapeHtmlAttribute(culto.title)}">
+        <div class="recent-cult-media">
+          ${culto.thumbnail
+            ? `<img src="${escapeHtmlAttribute(culto.thumbnail)}" alt="">`
+            : `<div class="recent-cult-placeholder">LIVE</div>`}
+          ${index === 0 ? `<span class="recent-cult-badge">Mais recente</span>` : ""}
+        </div>
+        <div class="recent-cult-content">
+          <div class="recent-cult-heading">
+            <strong>${escapeHtml(culto.title)}</strong>
+            <span>${escapeHtml(culto.date || "")}</span>
+          </div>
+          <div class="recent-cult-stats">
+            <div><span>Visualizações</span><strong>${formatNumber(culto.views)}</strong></div>
+            <div><span>Tempo médio</span><strong>${formatOptionalDuration(culto.avgDurationSec)}</strong></div>
+            <div><span>Retenção</span><strong>${formatOptionalPercentage(culto.retention)}</strong></div>
+            <div><span>Pico ao vivo</span><strong>${peakValue}</strong></div>
+          </div>
+          ${culto.analyticsReady === false ? `<p class="panel-description">Retenção e tempo médio ainda estão sendo processados pelo YouTube Analytics.</p>` : ""}
+          <button class="recent-cult-details" type="button" data-id="${escapeHtmlAttribute(culto.id)}">Ver detalhes</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  grid.querySelectorAll(".recent-cult-card").forEach(card => {
+    const open = () => openCultModal(card.dataset.id);
+    card.addEventListener("click", event => {
+      if (event.target.closest("button")) return;
+      open();
+    });
+    card.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    });
+  });
+  grid.querySelectorAll(".recent-cult-details").forEach(button => {
+    button.addEventListener("click", () => openCultModal(button.dataset.id));
+  });
+}
+
 function renderEvolution() {
+  const isDaily = state.period === "30d";
+  const granularity = document.getElementById("evolutionGranularity");
+  const title = document.getElementById("evolutionTitle");
+  const description = document.getElementById("evolutionDescription");
+
+  if (granularity) granularity.textContent = isDaily ? "Por dia" : "Por mês";
+  if (title) title.textContent = isDaily
+    ? "Visualizações por data da transmissão"
+    : "Visualizações por mês da transmissão";
+  if (description) {
+    description.textContent = isDaily
+      ? "Soma das visualizações atuais dos cultos transmitidos em cada dia."
+      : "Soma das visualizações atuais dos cultos transmitidos em cada mês.";
+  }
+
   criarGraficoEvolucao(
     document.getElementById("evolutionChart"),
-    state.data.evolution || { labels: [], views: [], hours: [], avgDurationSec: [] },
-    state.evolutionMetric
+    state.data.evolution || { labels: [], views: [] }
   );
 }
 
@@ -368,13 +458,31 @@ function renderRanking() {
   });
 }
 
+
+function buildCityRows(cities) {
+  const rows = Array.isArray(cities) ? cities.map(city => ({ ...city })) : [];
+  const informed = rows.reduce((sum, city) => sum + Number(city.value || 0), 0);
+  const remainder = Math.max(0, Math.round((100 - informed) * 10) / 10);
+
+  if (remainder >= 0.1) {
+    rows.push({
+      name: "Não informado ou outros",
+      state: "",
+      views: null,
+      value: remainder
+    });
+  }
+
+  return rows;
+}
+
 function renderAudience() {
   const audience = state.data.audience || {};
   criarGraficoSexo(document.getElementById("genderChart"), audience.gender || []);
   criarGraficoIdade(document.getElementById("ageChart"), audience.age || []);
   criarGraficoInscritos(document.getElementById("subscribersChart"), audience.subscribed || []);
 
-  const cities = audience.cities || [];
+  const cities = buildCityRows(audience.cities || []);
   document.getElementById("cityList").innerHTML = cities.length ? cities.map(city => `
     <div class="city-row">
       <div class="city-info">
@@ -456,9 +564,9 @@ async function openCultModal(id) {
 
   const modalMetrics = [
     ["Visualizações", formatNumber(culto.views)],
-    ["Horas assistidas", `${formatNumber(Math.round(culto.watchHours || 0))} h`],
-    ["Tempo médio", formatDuration(culto.avgDurationSec)],
-    ["Retenção", formatPercentage(culto.retention)],
+    ["Horas assistidas", formatAnalyticsMetric(culto.watchHours, value => `${formatNumber(Math.round(value))} h`)],
+    ["Tempo médio", formatAnalyticsMetric(culto.avgDurationSec, formatDuration)],
+    ["Retenção", formatAnalyticsMetric(culto.retention, formatPercentage)],
     ["Pico ao vivo", formatNumber(culto.peak || 0)],
     ["Média ao vivo", formatNumber(culto.avgConcurrent || 0)]
   ];
@@ -520,6 +628,26 @@ function formatPercentage(value) {
   return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(Number(value || 0))}%`;
 }
 
+function formatAnalyticsMetric(value, formatter) {
+  if (value === null || value === undefined || value === "") return "Em processamento";
+  return formatter(value);
+}
+
+function formatOptionalDuration(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  return formatDuration(value);
+}
+
+function formatApiDateForDisplay(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}` : "";
+}
+
+function formatOptionalPercentage(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  return formatPercentage(value);
+}
+
 function changeClass(change) {
   if (change === null || change === undefined || Number.isNaN(Number(change))) return "neutral";
   if (change > 0) return "positive";
@@ -528,9 +656,9 @@ function changeClass(change) {
 }
 
 function formatChange(change) {
-  if (change === null || change === undefined || Number.isNaN(Number(change))) return "Sem comparação semanal";
-  if (change > 0) return `↑ ${change.toFixed(1).replace(".", ",")}% vs. semana anterior`;
-  if (change < 0) return `↓ ${Math.abs(change).toFixed(1).replace(".", ",")}% vs. semana anterior`;
+  if (change === null || change === undefined || Number.isNaN(Number(change))) return "Sem base anterior para comparar";
+  if (change > 0) return `↑ ${change.toFixed(1).replace(".", ",")}% vs. período anterior`;
+  if (change < 0) return `↓ ${Math.abs(change).toFixed(1).replace(".", ",")}% vs. período anterior`;
   return "Sem variação relevante";
 }
 

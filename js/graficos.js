@@ -32,27 +32,28 @@ function destruirGraficosDashboard() {
   trafficChartInstance = null;
 }
 
-function criarGraficoEvolucao(canvas, dados, metric = "views") {
+
+function normalizarSerieVisualizacoes_(values) {
+  return (Array.isArray(values) ? values : []).map(value => {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  });
+}
+
+function criarGraficoEvolucao(canvas, dados) {
   destroyChart(evolutionChartInstance);
   evolutionChartInstance = null;
 
-  const isViews = metric === "views";
-  const isAverageDuration = metric === "avgDurationSec";
   const labels = Array.isArray(dados?.labels) ? [...dados.labels] : [];
-  const values = Array.isArray(dados?.[metric]) ? [...dados[metric]].map(Number) : [];
-
-  const datasetLabel = isViews
-    ? "Visualizações acumuladas"
-    : isAverageDuration
-      ? "Tempo médio por visualização"
-      : "Horas assistidas";
+  const values = normalizarSerieVisualizacoes_(dados?.views);
 
   evolutionChartInstance = new Chart(canvas, {
     type: "line",
     data: {
       labels,
       datasets: [{
-        label: datasetLabel,
+        label: "Visualizações",
         data: values,
         borderColor: "#b32025",
         backgroundColor: "rgba(179, 32, 37, 0.08)",
@@ -64,14 +65,8 @@ function criarGraficoEvolucao(canvas, dados, metric = "views") {
       }]
     },
     options: chartOptions({
-      yCallback: isViews
-        ? value => new Intl.NumberFormat("pt-BR", { notation: "compact" }).format(value)
-        : isAverageDuration
-          ? value => formatSecondsForChart(value)
-          : value => `${value} h`,
-      tooltipValueCallback: isAverageDuration
-        ? value => formatSecondsForChart(value)
-        : null
+      yCallback: value => new Intl.NumberFormat("pt-BR", { notation: "compact" }).format(value),
+      tooltipValueCallback: null
     })
   });
 }
